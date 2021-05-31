@@ -1,7 +1,7 @@
 from pathlib import Path
 import json
 from pprint import pprint
-import os
+import os, sys
 import base64
 from time import sleep
 from datetime import datetime, timedelta
@@ -27,6 +27,9 @@ class lnpanda():
         self.graphnodes = {}
         self.graphedges = {}
 
+        if not( "CRED_PATH" in os.environ and "LND_NODE_IP" in os.environ):
+            print("ERROR: Must define CRED_PATH and LND_NODE_IP")
+            sys.exit(-1)
 
         credential_path = Path(os.getenv("CRED_PATH"))
 
