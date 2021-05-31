@@ -27,14 +27,16 @@ class lnpanda():
         self.graphnodes = {}
         self.graphedges = {}
 
-        credential_path = Path("/home/skorn/Documents/creds/kungmeow/")
+
+        credential_path = Path(os.getenv("CRED_PATH"))
 
         mac = str(credential_path.joinpath("admin.macaroon").absolute())
         tls = str(credential_path.joinpath("tls.cert").absolute())
 
         # Create the connection to the remote node
+        ip_addr = os.getenv("LND_NODE_IP")
         self.lnd = LNDClient(
-            "192.168.1.58:10009",
+            f"{ip_addr}:10009",
             macaroon_filepath=mac,
             cert_filepath=tls
         )
@@ -212,24 +214,8 @@ class lnpanda():
 
 
     # TODO: NEED ONCHAIN MODULE
-    # def listCoins(self, min_confs=0, show_columns=False, add_columns=None):
-    #     a = LNDRestAPI()
-    #     url = f"/v1/utxos?min_confs={min_confs}&max_confs={getBlockHeight()}"
-    #     lnreq = a.get(url)
-
-    #     lnreq = lnd.list_coins()
-    #     print(f"Received message: {pformat(lnreq)}")
-    #     # Guard Clause
-    #     if "utxos" not in lnreq.keys():
-    #         print("No UTXOs available")
-    #         return
-    #     lnframe = pandas.DataFrame(lnreq["utxos"])
-    #     default_columns = ["address_type", "address", "amount_sat", "confirmations"]
-    #     if add_columns != None:
-    #         default_columns = default_columns + add_columns
-    #     if show_columns:
-    #         print(lnframe.columns)
-    #     return lnframe[default_columns]
+    # def listCoins(self):
+    #    pass
 
 
 if __name__ == "__main__":
