@@ -34,7 +34,7 @@ class lnpanda():
 
         # Create the connection to the remote node
         self.lnd = LNDClient(
-            "192.168.1.21:10009",
+            "192.168.1.58:10009",
             macaroon_filepath=mac,
             cert_filepath=tls
         )
@@ -182,15 +182,26 @@ class lnpanda():
         return fees
 
     def list_forwards(self):
+        # Build up the dataframe
         forwards_dict = protobuf_to_dict(self.lnd.forwarding_history(num_max_events=20000))
         forwards = pandas.DataFrame(forwards_dict["forwarding_events"])
 
-        forwards['datetime'] = forwards.timestamp.apply(lambda x: datetime.fromtimestamp(x))
-        forwards.drop("fee",axis=1, inplace=True)
+        # Do conversions
+        forwards['date_time'] = forwards.timestamp.apply(lambda x: datetime.fromtimestamp(x))
+        forwards.amt_in = forwards.amt_in.fillna(0).astype(int)
+        forwards.amt_out = forwards.amt_out.fillna(0).astype(int)
+        forwards['eff_fee_rate'] =  forwards.fee_msat / forwards.amt_out_msat * 1e6
+
+        # Remove unwanted columns
+        forwards.drop("fee", axis=1, inplace=True)
+        forwards.drop("timestamp_ns", axis=1, inplace=True)
+        forwards.drop("amt_in", axis=1, inplace=True)
+
+        forwards = forwards[["chan_id_in","chan_id_out","amt_in_msat","amt_out_msat","fee_msat","eff_fee_rate","date_time"]]
         return forwards
 
     def list_channels_and_fees(self):
-        frame = a.list_channels().merge(a.list_fees(), on=["chan_id"])
+        frame = self.list_channels().merge(self.list_fees(), on=["chan_id"])
 
         frame = frame[[
             'chan_id','active', 'alias', 'balanced',
@@ -220,13 +231,6 @@ class lnpanda():
     #         print(lnframe.columns)
     #     return lnframe[default_columns]
 
-
-# great one-liner
-# a.list_channels().merge(a.list_fees(), on=["chan_id"])[['chan_id','active', 'alias', 'balanced', 'capacity', 'local_balance','remote_balance','base_fee_msat','fee_per_mil','fee_rate']]
-
-# update fees from a list of channel ids
-# t = list(a.list_channels().merge(a.list_fees(), on=["chan_id"])[['chan_id','active', 'alias', 'balanced', 'capacity', 'local_balance','remote_balance','base_fee_msat','fee_per_mil','fee_rate']].query("balanced > 0.6").chan_id)
-# a.list_fees().query("chan_id.isin(@t)").apply(lambda x: a.lnd.update_channel_policy(chan_point=x["channel_point"],base_fee_msat=1,fee_rate=0.000250,time_lock_delta=20) ,axis=1)
 
 if __name__ == "__main__":
     a = lnpanda()

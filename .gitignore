@@ -2,3 +2,4 @@ env/*
 tenv/*
 */__pycache__/*
 __pycache__
+dist/*
