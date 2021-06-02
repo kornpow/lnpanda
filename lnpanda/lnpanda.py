@@ -103,7 +103,7 @@ class lnpanda():
         t = pandas.DataFrame(protobuf_to_dict(self.lnd.list_payments(index_offset=10000))["payments"])
         return t
 
-    def channels_with_cid(self,list_cids):
+    def get_peer(self, list_cids):
         return self.list_channels_and_fees().query("chan_id.isin(@list_cids)")
 
     def get_peer_pk(self, cid):
@@ -155,7 +155,8 @@ class lnpanda():
         edges = graph["edges"]
         edges_frame = pandas.DataFrame(edges)
         edges_frame = edges_frame[['channel_id', 'chan_point', 'node1_pub', 'node2_pub', 'capacity']]
-        edges_frame.query("node1_pub == @testpk or node2_pub == @testpk").count()
+
+        return edges_frame
 
 
 

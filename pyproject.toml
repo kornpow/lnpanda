@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lnpanda"
-version = "0.1.2"
+version = "0.1.3"
 description = "A tool which pairs Pandas to LND Lightning Network Data for Data Science"
 readme = "README.md"
 authors = ["Sam Korn <korn94sam@gmail.com>"]
