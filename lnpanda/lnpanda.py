@@ -100,8 +100,13 @@ class lnpanda():
         ]]
 
     def list_payments(self):
-        t = pandas.DataFrame(protobuf_to_dict(self.lnd.list_payments(index_offset=10000))["payments"])
+        t = pandas.DataFrame(protobuf_to_dict(self.lnd.list_payments(index_offset=0, max_payments=20000))["payments"])
+        t['dest_pk'] = t.htlcs.apply(lambda x: x[0]['route']['hops'][-1]['pub_key'])
+        t = t[['value_sat','creation_date','fee_msat','status','dest_pk']]
         return t
+
+    def list_invoice(self):
+        t = pandas.DataFrame(protobuf_to_dict(self.lnd.list_invoices(index_offset=10000))["payments"])
 
     def get_peer(self, list_cids):
         return self.list_channels_and_fees().query("chan_id.isin(@list_cids)")
@@ -141,7 +146,17 @@ class lnpanda():
         return channels
 
 
-    def graph_ingest(self):
+    def graph_ingest_edges(self):
+        c = self.lnd.describe_graph()
+        graph = protobuf_to_dict(c)
+
+        edges = graph["edges"]
+        edges_frame = pandas.DataFrame(edges)
+        edges_frame = edges_frame[['channel_id', 'chan_point', 'node1_pub', 'node2_pub', 'capacity']]
+
+        return edges_frame
+
+    def graph_ingest_nodes(self):
         c = self.lnd.describe_graph()
         graph = protobuf_to_dict(c)
 
@@ -151,12 +166,7 @@ class lnpanda():
         # pubkeys_frame = pubkeys_frame.query("last_update is not NAN")
         pubkeys_frame = pubkeys_frame[['pub_key', 'alias']]
 
-
-        edges = graph["edges"]
-        edges_frame = pandas.DataFrame(edges)
-        edges_frame = edges_frame[['channel_id', 'chan_point', 'node1_pub', 'node2_pub', 'capacity']]
-
-        return edges_frame
+        return pubkeys_frame
 
 
 
