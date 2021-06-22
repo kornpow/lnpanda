@@ -105,8 +105,8 @@ class lnpanda():
         t = t[['value_sat','creation_date','fee_msat','status','dest_pk']]
         return t
 
-    def list_invoice(self):
-        t = pandas.DataFrame(protobuf_to_dict(self.lnd.list_invoices(index_offset=10000))["payments"])
+    def list_invoices(self):
+        return pandas.DataFrame(protobuf_to_dict(self.lnd.list_invoices(index_offset=10000))["invoices"])
 
     def get_peer(self, list_cids):
         return self.list_channels_and_fees().query("chan_id.isin(@list_cids)")
@@ -213,7 +213,7 @@ class lnpanda():
         forwards.drop("timestamp_ns", axis=1, inplace=True)
         forwards.drop("amt_in", axis=1, inplace=True)
 
-        forwards = forwards[["chan_id_in","chan_id_out","amt_in_msat","amt_out_msat","fee_msat","eff_fee_rate","date_time"]]
+        forwards = forwards[["chan_id_in","chan_id_out","amt_in_msat","amt_out_msat","fee_msat","eff_fee_rate","date_time","timestamp"]]
         return forwards
 
     def list_channels_and_fees(self):
@@ -225,6 +225,32 @@ class lnpanda():
             'base_fee_msat','fee_per_mil','fee_rate'
         ]]
         return frame
+
+    def check_route_cost(self, route, amt):
+        try:
+            r = self.lnd.build_route(
+                amt * 1000, 
+                final_cltv_delta=40, 
+                oid=0,
+                hop_pubkeys=route,
+            )
+            fee_rate = r.route.total_fees_msat/r.route.total_amt_msat * 1e6
+            cost = r.route.total_fees_msat/1000
+            print(f"Route Fee Rate: {fee_rate}")
+            print(f"Route cost: {cost}")
+            return fee_rate,cost
+        except Exception as e:
+            return 20000, 20000
+
+
+    def update_fees(self, cid, fee_rate):
+        self.lnd.update_channel_policy(
+            base_fee_msat=1,
+            fee_rate=0.000001 * fee_rate,
+            time_lock_delta=25,
+            chan_point=a.get_peer_cp(cid)
+        )
+        print(a.list_channels_and_fees().query("chan_id == @cid"))
 
 
     # TODO: NEED ONCHAIN MODULE
