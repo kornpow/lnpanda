@@ -248,14 +248,14 @@ class lnpanda():
             base_fee_msat=1,
             fee_rate=0.000001 * fee_rate,
             time_lock_delta=25,
-            chan_point=a.get_peer_cp(cid)
+            chan_point=self.get_peer_cp(cid)
         )
-        print(a.list_channels_and_fees().query("chan_id == @cid"))
+        print(self.list_channels_and_fees().query("chan_id == @cid"))
 
 
-    # TODO: NEED ONCHAIN MODULE
-    # def listCoins(self):
-    #    pass
+    def list_utxos(self):
+       frame = pandas.DataFrame(protobuf_to_dict(self.lnd.list_unspent())["utxos"])
+       return frame[['address','amount_sat','confirmations']]
 
 
 if __name__ == "__main__":
