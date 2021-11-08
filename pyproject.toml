@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lnpanda"
-version = "0.1.11"
+version = "0.1.14"
 description = "A tool which pairs Pandas to LND Lightning Network Data for Data Science"
 readme = "README.md"
 authors = ["Sam Korn <korn94sam@gmail.com>"]
@@ -11,7 +11,7 @@ python = ">=3.7.1"
 protobuf3-to-dict = "^0.1.5"
 pandas = "^1.2.4"
 pdir2 = "^0.3.2"
-lnd-grpc-client = "^0.3.8"
+lnd-grpc-client = "^0.3.21"
 
 [tool.poetry.dev-dependencies]
 

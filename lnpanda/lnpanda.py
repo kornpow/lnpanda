@@ -6,6 +6,7 @@ import base64
 from time import sleep
 from datetime import datetime, timedelta
 import code
+from functools import lru_cache
 
 # Pip installed Modules
 from lndgrpc import LNDClient
@@ -75,6 +76,7 @@ class lnpanda():
         y[["local_balance", "remote_balance", "capacity"]] = y[
             ["local_balance", "remote_balance", "capacity"]
         ].apply(pandas.to_numeric, errors="coerce")
+        y[["local_balance", "remote_balance", "capacity"]] = y[["local_balance", "remote_balance", "capacity"]].astype(int)
         y["balanced"] = y.apply(getBalance, axis=1)
         y["alias"] = y.apply(lambda x: self.get_alias(x.remote_pubkey), axis=1)
         y["tobalance"] = y.apply(getToBalance, axis=1)
@@ -120,20 +122,22 @@ class lnpanda():
     def get_peer_alias(self, cid):
         return self.get_alias(self.get_peer_pk(cid))
 
+    @lru_cache(maxsize=None)
     def get_alias(self, pubkey):
-        try:
-            # Attempt to use index names first
-            alias = self.pkdb[pubkey]
-            return alias
-        except KeyError as e:
-            try:
-                lnreq = protobuf_to_dict(self.lnd.get_node_info(pubkey, include_channels=False))
-                alias = lnreq["node"]["alias"]
-                self.pkdb.update({pubkey: alias})
-                return lnreq["node"]["alias"]
-            except KeyError as e:
-                print(f"{pubkey} doesn't have an alias? Error: {e}")
-                return "NONE/DELETED"
+        return self.lnd.get_node_info(pubkey, include_channels=False).node.alias
+        # try:
+        #     # Attempt to use index names first
+        #     alias = self.pkdb[pubkey]
+        #     return alias
+        # except KeyError as e:
+        #     try:
+        #         lnreq = protobuf_to_dict(self.lnd.get_node_info(pubkey, include_channels=False))
+        #         alias = lnreq["node"]["alias"]
+        #         self.pkdb.update({pubkey: alias})
+        #         return lnreq["node"]["alias"]
+        #     except KeyError as e:
+        #         print(f"{pubkey} doesn't have an alias? Error: {e}")
+        #         return "NONE/DELETED"
 
 
     def list_node_channels(self, pubkey):
@@ -146,13 +150,16 @@ class lnpanda():
         return channels
 
 
-    def graph_ingest_edges(self):
+    def graph_ingest_edges(self, include_policy=False):
         c = self.lnd.describe_graph()
         graph = protobuf_to_dict(c)
 
         edges = graph["edges"]
         edges_frame = pandas.DataFrame(edges)
-        edges_frame = edges_frame[['channel_id', 'chan_point', 'node1_pub', 'node2_pub', 'capacity']]
+        if include_policy:
+            edges_frame = edges_frame[['channel_id', 'chan_point', 'node1_pub', 'node2_pub', 'capacity','node1_policy', 'node2_policy']]
+        else:
+            edges_frame = edges_frame[['channel_id', 'chan_point', 'node1_pub', 'node2_pub', 'capacity']]
 
         return edges_frame
 
@@ -181,7 +188,8 @@ class lnpanda():
         txns_dict = protobuf_to_dict(self.lnd.list_transactions())
         txns = pandas.DataFrame(txns_dict["transactions"])
         txns = txns[["tx_hash","time_stamp","label","amount","total_fees","num_confirmations","block_height"]].fillna(0)
-        txns = txns.convert_dtypes(convert_integer=True)
+        txns[["time_stamp","amount","total_fees","num_confirmations","block_height"]] = txns[["time_stamp","amount","total_fees","num_confirmations","block_height"]].convert_dtypes(convert_integer=True)
+        txns['time_stamp'] = a['time_stamp'].apply(lambda x: datetime.fromtimestamp(x))
         return txns[::-1]
 
 
@@ -197,7 +205,7 @@ class lnpanda():
         fees = pandas.DataFrame(fees_dict["channel_fees"])
         return fees
 
-    def list_forwards(self):
+    def list_forwards(self, days_past):
         # Build up the dataframe
         forwards_dict = protobuf_to_dict(self.lnd.forwarding_history(num_max_events=20000))
         forwards = pandas.DataFrame(forwards_dict["forwarding_events"])
@@ -214,6 +222,9 @@ class lnpanda():
         forwards.drop("amt_in", axis=1, inplace=True)
 
         forwards = forwards[["chan_id_in","chan_id_out","amt_in_msat","amt_out_msat","fee_msat","eff_fee_rate","date_time","timestamp"]]
+
+        if days_past:
+            forwards = forwards.query(f"timestamp > { int((datetime.now() - timedelta(days=days_past)).timestamp())} ")
         return forwards
 
     def list_channels_and_fees(self):
