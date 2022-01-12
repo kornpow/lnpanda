@@ -104,6 +104,7 @@ class lnpanda():
     def list_payments(self):
         t = pandas.DataFrame(protobuf_to_dict(self.lnd.list_payments(index_offset=0, max_payments=20000))["payments"])
         t['dest_pk'] = t.htlcs.apply(lambda x: x[0]['route']['hops'][-1]['pub_key'])
+        # t['memo'] = t.payment_request.apply(lambda x: self.lnd.decode_pay_req(x).description)
         t = t[['value_sat','creation_date','fee_msat','status','dest_pk']]
         return t
 
@@ -189,7 +190,7 @@ class lnpanda():
         txns = pandas.DataFrame(txns_dict["transactions"])
         txns = txns[["tx_hash","time_stamp","label","amount","total_fees","num_confirmations","block_height"]].fillna(0)
         txns[["time_stamp","amount","total_fees","num_confirmations","block_height"]] = txns[["time_stamp","amount","total_fees","num_confirmations","block_height"]].convert_dtypes(convert_integer=True)
-        txns['time_stamp'] = a['time_stamp'].apply(lambda x: datetime.fromtimestamp(x))
+        txns['time_stamp'] = txns['time_stamp'].apply(lambda x: datetime.fromtimestamp(x))
         return txns[::-1]
 
 
@@ -207,7 +208,7 @@ class lnpanda():
 
     def list_forwards(self, days_past):
         # Build up the dataframe
-        forwards_dict = protobuf_to_dict(self.lnd.forwarding_history(num_max_events=20000))
+        forwards_dict = protobuf_to_dict(self.lnd.forwarding_history(num_max_events=50000))
         forwards = pandas.DataFrame(forwards_dict["forwarding_events"])
 
         # Do conversions
@@ -268,6 +269,10 @@ class lnpanda():
        frame = pandas.DataFrame(protobuf_to_dict(self.lnd.list_unspent())["utxos"])
        return frame[['address','amount_sat','confirmations']]
 
+
+    def close_channel(self, cid, fee_rate=1):
+        txid, index = self.get_peer_cp(cid).split(":")
+        self.lnd.close_channel(self.get_peer_cp(cid), sat_per_vbyte=fee_rate)
 
 if __name__ == "__main__":
     a = lnpanda()
