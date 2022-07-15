@@ -14,3 +14,5 @@ pandas.options.display.float_format = "{:.8f}".format
 
 # Create main object
 ln = lnpanda()
+import code
+code.interact(local=dict(globals(), **locals()))

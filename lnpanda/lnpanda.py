@@ -10,6 +10,8 @@ from functools import lru_cache
 
 # Pip installed Modules
 from lndgrpc import LNDClient
+from loopgrpc import LoopClient
+from poolgrpc import PoolClient
 import pdir
 import pandas
 from protobuf_to_dict import protobuf_to_dict
@@ -44,6 +46,32 @@ class lnpanda():
             macaroon_filepath=mac,
             cert_filepath=tls
         )
+
+        self.loop = LoopClient()
+        self.pool = PoolClient()
+
+    def list_closed_channels(self):
+        lnreq = protobuf_to_dict(self.lnd.closed_channel())
+
+        # Check if no channels
+        if not lnreq["channels"]:
+            print("No Channels Available!")
+            return lnreq
+
+        y = d[[
+            "channel_point",
+            "chan_id",
+            "close_height",
+            "capacity",
+            "settled_balance",
+            "close_type",
+            "open_initiator",
+            "close_initiator",
+            "time_locked_balance",
+            "closing_tx_hash"
+        ]]
+        return y
+
 
     def list_channels(self):
         def getBalance(row):
@@ -109,7 +137,7 @@ class lnpanda():
         return t
 
     def list_invoices(self):
-        return pandas.DataFrame(protobuf_to_dict(self.lnd.list_invoices(index_offset=10000))["invoices"])
+        return pandas.DataFrame(protobuf_to_dict(self.lnd.list_invoices(num_max_invoices=10000))["invoices"])[["value", "is_keysend", "memo", "settled"]]
 
     def get_peer(self, list_cids):
         return self.list_channels_and_fees().query("chan_id.isin(@list_cids)")
@@ -140,7 +168,7 @@ class lnpanda():
         #         print(f"{pubkey} doesn't have an alias? Error: {e}")
         #         return "NONE/DELETED"
 
-
+    @lru_cache(maxsize=None)
     def list_node_channels(self, pubkey):
         lnreq = protobuf_to_dict(self.lnd.get_node_info(pubkey, include_channels=True))
         channels = pandas.DataFrame(lnreq["channels"])
@@ -181,9 +209,9 @@ class lnpanda():
     def get_block_height(self):
         return protobuf_to_dict(self.lnd.get_info())["block_height"]
 
-
+    @lru_cache(maxsize=None)
     def get_my_pk(self):
-        return protobuf_to_dict(self.lnd.get_info())["identity_pubkey"]
+        return self.lnd.get_info().identity_pubkey
 
     def list_onchain_txns(self):
         txns_dict = protobuf_to_dict(self.lnd.list_transactions())
@@ -202,7 +230,7 @@ class lnpanda():
 
 
     def list_fees(self):
-        fees_dict = protobuf_to_dict(self.lnd.fee_report())
+        fees_dict = protobuf_to_dict(self.lnd.fee_report(), including_default_value_fields=True)
         fees = pandas.DataFrame(fees_dict["channel_fees"])
         return fees
 
@@ -231,11 +259,20 @@ class lnpanda():
     def list_channels_and_fees(self):
         frame = self.list_channels().merge(self.list_fees(), on=["chan_id"])
 
-        frame = frame[[
-            'chan_id','active', 'alias', 'balanced',
-            'capacity', 'local_balance','remote_balance',
-            'base_fee_msat','fee_per_mil','fee_rate'
-        ]]
+        try:
+            frame = frame[[
+                'chan_id','active', 'alias', 'balanced',
+                'capacity', 'local_balance','remote_balance',
+                'base_fee_msat','fee_per_mil','fee_rate'
+            ]]
+        except Exception as e:
+            print(e)
+            frame = frame[[
+                'chan_id','active', 'alias', 'balanced',
+                'capacity', 'local_balance','remote_balance',
+                'fee_per_mil','fee_rate'
+            ]]
+
         return frame
 
     def check_route_cost(self, route, amt):
@@ -255,9 +292,9 @@ class lnpanda():
             return 20000, 20000
 
 
-    def update_fees(self, cid, fee_rate):
+    def update_fees(self, cid, fee_rate, base_fee=0):
         self.lnd.update_channel_policy(
-            base_fee_msat=1,
+            base_fee_msat=base_fee,
             fee_rate=0.000001 * fee_rate,
             time_lock_delta=25,
             chan_point=self.get_peer_cp(cid)
@@ -274,6 +311,33 @@ class lnpanda():
         txid, index = self.get_peer_cp(cid).split(":")
         self.lnd.close_channel(self.get_peer_cp(cid), sat_per_vbyte=fee_rate)
 
+    # from rebalance-lnd
+    @lru_cache(maxsize=None)
+    def get_edge(self, channel_id):
+        edge = protobuf_to_dict(self.lnd.get_chan_info(channel_id))
+        node1 = edge["node1_policy"]
+        node1["pubkey"] = edge["node1_pub"]
+        node2 = edge["node2_policy"]
+        node2["pubkey"] = edge["node2_pub"]
+        data = {node1["pubkey"]: node1, node2["pubkey"]: node2}
+        df = pandas.DataFrame(data)
+        return df
+
+
+def cli():
+    import code
+    pandas.set_option("display.max_colwidth", None)
+    pandas.set_option("display.max_rows", None)
+    pandas.options.display.float_format = "{:.8f}".format
+    # LNDClient gets all configuration parameters from environment variables!
+    ln = lnpanda()
+
+    # Enter a shell for interacting with LNPanda
+    code.interact(local=dict(globals(), **locals()))  
+
 if __name__ == "__main__":
     a = lnpanda()
     code.interact(local=locals())
+
+
+
